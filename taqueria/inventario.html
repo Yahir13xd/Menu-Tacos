@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario CRUD - Taquería MS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        :root {
+            --primary-color: #d97706;
+            --secondary-color: #f59e0b;
+            --dark-bg: #1a1a1a;
+            --card-bg: #2c2c2c; /* Usado para modal y tabla */
+            --text-light: #f0f0f0;
+            --text-muted: #a0a0a0;
+            --danger-color: #ef4444;
+            --success-color: #22c55e;
+            --input-bg: #3a3a3a;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-light);
+            padding-bottom: 100px; /* Espacio para la barra de navegación fija y botón flotante */
+        }
+
+        .header-taqueria {
+            background-color: #000000;
+            color: var(--primary-color);
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        /* Modal Styles */
+        .modal {
+            background-color: rgba(0, 0, 0, 0.7);
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-content {
+            background-color: var(--card-bg);
+            transition: transform 0.3s ease;
+        }
+        .modal.hidden .modal-content {
+            transform: translateY(-50px);
+        }
+        .form-input, .form-select, .form-textarea {
+            background-color: var(--input-bg);
+            border: 1px solid var(--secondary-color);
+            color: var(--text-light);
+            border-radius: 0.375rem; /* rounded-md */
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.5);
+        }
+        .form-label {
+            color: var(--text-muted);
+        }
+        
+        /* Table Styles */
+        .inventory-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            overflow: hidden; /* Para que el borde redondeado afecte a la tabla */
+        }
+        .inventory-table th, .inventory-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--input-bg);
+        }
+        .inventory-table th {
+            background-color: var(--primary-color);
+            color: var(--dark-bg); /* Texto oscuro para contraste en header naranja */
+            font-weight: 600;
+        }
+        .inventory-table tbody tr:hover {
+            background-color: #383838; /* Un poco más claro que card-bg */
+        }
+        .inventory-table .action-btn {
+            margin-right: 0.5rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 0.25rem;
+            transition: background-color 0.2s ease;
+        }
+        .btn-edit { background-color: var(--secondary-color); color: var(--dark-bg); }
+        .btn-edit:hover { background-color: #fBBF24; } /* Amarillo más claro */
+        .btn-delete { background-color: var(--danger-color); color: var(--text-light); }
+        .btn-delete:hover { background-color: #dc2626; } /* Rojo más oscuro */
+
+        /* Ya no se usa stock-status-low o stock-status-ok basado en umbral,
+           pero podrías tener un color base para el stock si quieres */
+        .stock-value {
+            /* color: var(--text-light); Puedes añadir un color específico si es necesario */
+        }
+
+
+        /* Floating Add Button */
+        .floating-add-btn {
+            background-color: var(--primary-color);
+            color: white;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+        }
+        .floating-add-btn:hover {
+            background-color: var(--secondary-color);
+            transform: scale(1.1);
+        }
+
+        /* Bottom Nav */
+        .bottom-nav { background-color: #1f2937; box-shadow: 0 -2px 10px rgba(0,0,0,0.3); }
+        .nav-btn { color: var(--text-muted); transition: color 0.3s ease; text-decoration: none; }
+        .nav-btn:hover { color: var(--secondary-color); }
+        .nav-btn.active { color: var(--primary-color); }
+        .nav-btn.active i { color: var(--primary-color); }
+        .nav-btn i { transition: color 0.3s ease; }
+    </style>
+</head>
+<body>
+
+    <div class="header-taqueria">
+        <h1 class="text-xl font-bold">Taquería MS - Gestión de Inventario</h1>
+        <div><i class="fas fa-clipboard-list text-2xl"></i></div>
+    </div>
+
+    <div class="container mx-auto px-4 py-6">
+        <button id="openAddModalBtn" class="mb-6 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out">
+            <i class="fas fa-plus mr-2"></i>Añadir Nuevo Producto
+        </button>
+
+        <div class="overflow-x-auto">
+            <table class="inventory-table shadow-lg">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Categoría</th>
+                        <th>Stock</th>
+                        <th>Unidad</th>
+                        <th>Notas/Proveedor</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryTableBody">
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-gray-400">Cargando inventario...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="inventoryModal" class="modal fixed inset-0 w-full h-full flex items-center justify-center hidden z-50">
+        <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50"></div>
+        <div class="modal-content w-11/12 md:max-w-lg mx-auto rounded-xl shadow-lg z-50 overflow-y-auto p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modalTitle" class="text-2xl font-semibold text-primary-color">Añadir Producto</h3>
+                <button id="closeModalBtn" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <form id="inventoryForm">
+                <input type="hidden" id="itemId">
+                <div class="mb-4">
+                    <label for="itemName" class="form-label block text-sm font-medium mb-1">Nombre del Producto</label>
+                    <input type="text" id="itemName" class="form-input w-full p-2" required>
+                </div>
+                <div class="mb-4">
+                    <label for="itemCategory" class="form-label block text-sm font-medium mb-1">Categoría</label>
+                    <select id="itemCategory" class="form-select w-full p-2" required>
+                        <option value="">Seleccione una categoría...</option>
+                        <option value="Carnes y Proteínas">Carnes y Proteínas</option>
+                        <option value="Tortillas y Panes">Tortillas y Panes</option>
+                        <option value="Vegetales y Complementos">Vegetales y Complementos</option>
+                        <option value="Salsas">Salsas</option>
+                        <option value="Bebidas">Bebidas</option>
+                        <option value="Desechables">Desechables</option>
+                        <option value="Insumos Secos / Otros">Insumos Secos / Otros</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label for="itemStock" class="form-label block text-sm font-medium mb-1">Stock Actual</label>
+                        <input type="number" id="itemStock" class="form-input w-full p-2" required min="0" step="any">
+                    </div>
+                    <div>
+                        <label for="itemUnit" class="form-label block text-sm font-medium mb-1">Unidad (kg, pz, lt)</label>
+                        <input type="text" id="itemUnit" class="form-input w-full p-2" required placeholder="ej: kg, lt, unidades">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label for="itemNotes" class="form-label block text-sm font-medium mb-1">Notas / Proveedor (Opcional)</label>
+                    <textarea id="itemNotes" class="form-textarea w-full p-2" rows="2" placeholder="ej: Proveedor 'El Buen Sabor'"></textarea>
+                </div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" id="cancelFormBtn" class="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition duration-150">Cancelar</button>
+                    <button type="submit" class="bg-primary-color hover:bg-secondary-color text-white font-bold py-2 px-4 rounded-lg transition duration-150">Guardar Producto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="fixed bottom-0 left-0 right-0 bg-gray-800 bottom-nav flex justify-around py-3 z-40">
+        <a href="vista_admin.html" class="nav-btn flex flex-col items-center" data-tab="dashboard">
+            <i class="fas fa-chart-pie text-xl mb-1"></i><span class="text-xs">Dashboard</span>
+        </a>
+        <a href="inventario.html" class="nav-btn flex flex-col items-center active" data-tab="inventory">
+            <i class="fas fa-boxes text-xl mb-1"></i><span class="text-xs">Inventario</span>
+        </a>
+    </div>
+
+<script>
+    // Configuración de Firebase (PROPORCIONADA POR TI - VERIFICA QUE SEA EXACTA)
+    const firebaseConfig = {
+        apiKey: "AIzaSyDi4WBHRGgXMp_rtPvV9IDw3foEjtr0L2o",
+        authDomain: "tacosms-acbb2.firebaseapp.com",
+        databaseURL: "https://tacosms-acbb2-default-rtdb.firebaseio.com",
+        projectId: "tacosms-acbb2",
+        storageBucket: "tacosms-acbb2.firebasestorage.app", // Usando el que proporcionaste
+        messagingSenderId: "701143542092",
+        appId: "1:701143542092:web:29f1d59ffe2751a3c207e9"
+    };
+
+    // Inicializar Firebase solo si no se ha hecho antes
+    console.log("Intentando inicializar Firebase...");
+    if (!firebase.apps.length) {
+        try {
+            firebase.initializeApp(firebaseConfig);
+            console.log("Firebase inicializado correctamente.");
+        } catch (e) {
+            console.error("Error al inicializar Firebase:", e);
+            alert("ERROR CRÍTICO: No se pudo inicializar Firebase. Revisa la consola y la configuración.");
+        }
+    } else {
+        console.log("Firebase ya estaba inicializado.");
+    }
+    
+    const database = firebase.database();
+    const inventoryRef = database.ref('inventory');
+    console.log("Referencia a 'inventory' en Firebase creada.");
+
+    // DOM Elements
+    const openAddModalBtn = document.getElementById('openAddModalBtn');
+    const inventoryModal = document.getElementById('inventoryModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const cancelFormBtn = document.getElementById('cancelFormBtn');
+    const modalTitle = document.getElementById('modalTitle');
+    const inventoryForm = document.getElementById('inventoryForm');
+    const inventoryTableBody = document.getElementById('inventoryTableBody');
+
+    // Form fields
+    const itemIdField = document.getElementById('itemId');
+    const itemNameField = document.getElementById('itemName');
+    const itemCategoryField = document.getElementById('itemCategory');
+    const itemStockField = document.getElementById('itemStock');
+    const itemUnitField = document.getElementById('itemUnit');
+    const itemNotesField = document.getElementById('itemNotes');
+
+    const openModal = (item = null) => {
+        console.log("Abriendo modal. Item:", item);
+        inventoryForm.reset(); 
+        if (item && item.id) { // Editing
+            modalTitle.textContent = 'Editar Producto';
+            itemIdField.value = item.id;
+            itemNameField.value = item.name;
+            itemCategoryField.value = item.category;
+            itemStockField.value = item.stock;
+            itemUnitField.value = item.unit;
+            itemNotesField.value = item.notes || '';
+        } else { // Adding
+            modalTitle.textContent = 'Añadir Nuevo Producto';
+            itemIdField.value = ''; 
+        }
+        inventoryModal.classList.remove('hidden');
+        inventoryModal.classList.add('flex');
+    };
+
+    const closeModal = () => {
+        console.log("Cerrando modal.");
+        inventoryModal.classList.add('hidden');
+        inventoryModal.classList.remove('flex');
+        inventoryForm.reset();
+    };
+
+    if(openAddModalBtn) openAddModalBtn.addEventListener('click', () => openModal());
+    if(closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+    if(cancelFormBtn) cancelFormBtn.addEventListener('click', closeModal);
+    if(inventoryModal) inventoryModal.addEventListener('click', (event) => {
+        if (event.target === inventoryModal) {
+            closeModal();
+        }
+    });
+
+    if(inventoryForm) inventoryForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        console.log("Formulario enviado.");
+
+        const id = itemIdField.value;
+        const stockValue = parseFloat(itemStockField.value);
+
+        const itemData = {
+            name: itemNameField.value.trim(),
+            category: itemCategoryField.value,
+            stock: stockValue,
+            unit: itemUnitField.value.trim(),
+            notes: itemNotesField.value.trim(),
+            lastUpdated: new Date().toISOString()
+        };
+        console.log("Datos del producto preparados:", itemData);
+
+        if (!itemData.name || !itemData.category || isNaN(itemData.stock) || !itemData.unit) {
+            alert('Por favor, completa todos los campos obligatorios (Nombre, Categoría, Stock, Unidad) con valores válidos.');
+            console.warn("Validación fallida en el formulario.");
+            return;
+        }
+
+        const submitButton = inventoryForm.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        submitButton.textContent = 'Guardando...';
+        console.log("Botón 'Guardar' deshabilitado, texto cambiado a 'Guardando...'.");
+
+        let firebasePromise;
+
+        if (id) { // Update existing item
+            console.log(`Intentando actualizar producto con ID: ${id}`);
+            firebasePromise = database.ref('inventory/' + id).update(itemData);
+        } else { // Add new item
+            console.log("Intentando añadir nuevo producto.");
+            firebasePromise = inventoryRef.push(itemData);
+        }
+
+        firebasePromise
+            .then(() => {
+                console.log('Operación con Firebase exitosa (then).');
+                if (id) {
+                    alert('¡Producto actualizado exitosamente!');
+                } else {
+                    alert('¡Producto añadido exitosamente!');
+                }
+                closeModal();
+            })
+            .catch(error => {
+                console.error('Error en la operación con Firebase (catch):', error.code, error.message);
+                alert(`Error en la operación con Firebase: ${error.message} (Código: ${error.code})`);
+            })
+            .finally(() => {
+                console.log("Ejecutando bloque .finally()");
+                submitButton.disabled = false;
+                submitButton.textContent = 'Guardar Producto';
+                console.log("Botón 'Guardar' rehabilitado.");
+            });
+    });
+
+    const renderInventoryTable = (items) => {
+        // console.log("Renderizando tabla de inventario con items:", items); // Puede ser muy verboso
+        inventoryTableBody.innerHTML = ''; 
+        if (!items || Object.keys(items).length === 0) {
+            inventoryTableBody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-400">No hay productos en el inventario. ¡Añade algunos!</td></tr>';
+            return;
+        }
+
+        Object.entries(items).forEach(([id, item]) => {
+            const row = inventoryTableBody.insertRow();
+            row.insertCell().textContent = item.name;
+            row.insertCell().textContent = item.category;
+            
+            const stockCell = row.insertCell();
+            stockCell.textContent = item.stock;
+            stockCell.classList.add('stock-value');
+
+            row.insertCell().textContent = item.unit;
+            row.insertCell().textContent = item.notes || '-';
+
+            const actionsCell = row.insertCell();
+            actionsCell.classList.add('whitespace-nowrap'); 
+
+            const editBtn = document.createElement('button');
+            editBtn.innerHTML = '<i class="fas fa-edit"></i> Editar';
+            editBtn.classList.add('action-btn', 'btn-edit', 'text-sm');
+            editBtn.onclick = () => openModal({ id, ...item });
+            actionsCell.appendChild(editBtn);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerHTML = '<i class="fas fa-trash"></i> Eliminar';
+            deleteBtn.classList.add('action-btn', 'btn-delete', 'text-sm');
+            deleteBtn.onclick = () => {
+                if (confirm(`¿Estás seguro de que quieres eliminar "${item.name}"?`)) {
+                    console.log(`Intentando eliminar producto con ID: ${id}`);
+                    database.ref('inventory/' + id).remove()
+                        .then(() => {
+                            console.log('Producto eliminado de Firebase (then).');
+                            alert('Producto eliminado exitosamente.');
+                        })
+                        .catch(error => {
+                            console.error('Error al eliminar producto de Firebase (catch):', error.code, error.message);
+                            alert(`Error al eliminar producto: ${error.message} (Código: ${error.code})`);
+                        });
+                }
+            };
+            actionsCell.appendChild(deleteBtn);
+        });
+    };
+
+    console.log("Configurando listener para 'value' en inventoryRef...");
+    inventoryRef.on('value', (snapshot) => {
+        console.log("Datos recibidos de Firebase (inventoryRef 'value' listener).");
+        const items = snapshot.val();
+        renderInventoryTable(items);
+    }, (errorObject) => {
+        console.error("Error al leer datos de Firebase (inventoryRef 'value' listener): ", errorObject.code, errorObject.message);
+        inventoryTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-400">Error al cargar el inventario: ${errorObject.message}. Revisa la consola.</td></tr>`;
+        alert(`Error al cargar datos del inventario: ${errorObject.message}. Asegúrate que tu archivo de configuración de Firebase (firebaseConfig) es correcto y que tienes conexión a internet.`);
+    });
+
+    // Verificadores adicionales para elementos DOM
+    if (!openAddModalBtn) console.error("Botón 'openAddModalBtn' no encontrado.");
+    if (!inventoryModal) console.error("Elemento 'inventoryModal' no encontrado.");
+    if (!inventoryForm) console.error("Formulario 'inventoryForm' no encontrado.");
+    if (!inventoryTableBody) console.error("Elemento 'inventoryTableBody' no encontrado.");
+
+</script>
+</body>
+</html>

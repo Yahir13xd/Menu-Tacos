@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vista Gerente - Taquería MS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script> 
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        :root {
+            --primary: #d97706;
+            --secondary: #f59e0b;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #1a1a1a;
+            color: white;
+        }
+        
+        .stats-card {
+            background: linear-gradient(145deg, #2d2d2d, #252525);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .stats-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+        }
+        
+        .best-seller-card {
+            background: linear-gradient(145deg, #2d2d2d, #252525);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .best-seller-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .nav-btn {
+            color: #777;
+            transition: all 0.3s;
+        }
+        
+        .nav-btn.active {
+            color: var(--primary);
+        }
+        
+        .nav-btn.active svg, .nav-btn.active i { /* Añadido 'i' para FontAwesome */
+            fill: var(--primary);
+            color: var(--primary); /* Para FontAwesome */
+        }
+        
+        .chart-container {
+            background: #2d2d2d;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .timeframe-btn {
+            background: #3d3d3d;
+            color: #aaa;
+            transition: all 0.3s;
+        }
+        
+        .timeframe-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(217, 119, 6, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); }
+        }
+        
+        .floating { animation: floating 3s ease-in-out infinite; }
+        @keyframes floating {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        
+        .glow-on-hover { transition: all 0.3s ease; }
+        .glow-on-hover:hover { box-shadow: 0 0 15px rgba(217, 119, 6, 0.5); }
+        
+        @media (min-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .flex-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+            .flex-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-20">
+    <div class="bg-black py-4 px-6 flex justify-between items-center sticky top-0 z-20"> 
+        <h1 class="text-xl font-bold text-amber-500">Taquería MS - Vista Gerente</h1>
+        <div class="flex items-center space-x-4">
+            <span class="text-sm bg-amber-600 px-3 py-1 rounded-full" id="current-date"></span>
+            <button id="logoutButton" title="Cerrar Sesión" class="text-white hover:text-red-500 transition-colors duration-150">
+                <i class="fas fa-sign-out-alt text-xl"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="mainContent" class="px-4 py-3 opacity-0 transition-opacity duration-500"> 
+        <div class="flex overflow-x-auto whitespace-nowrap space-x-2 mb-6 pb-2">
+            <button class="timeframe-btn px-4 py-2 rounded-full font-medium active" data-timeframe="hoy">Hoy</button>
+            <button class="timeframe-btn px-4 py-2 rounded-full font-medium" data-timeframe="semana">Esta Semana</button>
+            <button class="timeframe-btn px-4 py-2 rounded-full font-medium" data-timeframe="mes">Este Mes</button>
+            <button class="timeframe-btn px-4 py-2 rounded-full font-medium" data-timeframe="año">Este Año</button>
+            <button class="timeframe-btn px-4 py-2 rounded-full font-medium" data-timeframe="personalizado">Personalizado</button>
+        </div>
+        
+        <h2 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-chart-line text-amber-500 mr-2"></i> Resumen General
+        </h2>
+        <div class="grid grid-cols-1 gap-4 mb-6 stats-grid">
+            <div class="stats-card p-5 glow-on-hover">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-gray-400 text-sm">Ventas Totales</p>
+                        <h3 class="text-2xl font-bold mt-1" id="total-sales">$0</h3>
+                        <p class="text-green-400 text-sm mt-2 flex items-center" id="sales-change">
+                            <i class="fas fa-caret-up mr-1"></i> 0%
+                        </p>
+                    </div>
+                    <div class="bg-amber-500 bg-opacity-20 p-3 rounded-full">
+                        <i class="fas fa-dollar-sign text-amber-500 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stats-card p-5 glow-on-hover">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-gray-400 text-sm">Órdenes Totales</p>
+                        <h3 class="text-2xl font-bold mt-1" id="total-orders">0</h3>
+                        <p class="text-green-400 text-sm mt-2 flex items-center" id="orders-change">
+                            <i class="fas fa-caret-up mr-1"></i> 0%
+                        </p>
+                    </div>
+                    <div class="bg-blue-500 bg-opacity-20 p-3 rounded-full">
+                        <i class="fas fa-clipboard-list text-blue-500 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stats-card p-5 glow-on-hover">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-gray-400 text-sm">Productos Vendidos</p>
+                        <h3 class="text-2xl font-bold mt-1" id="total-products">0</h3>
+                        <p class="text-green-400 text-sm mt-2 flex items-center" id="products-change">
+                            <i class="fas fa-caret-up mr-1"></i> 0%
+                        </p>
+                    </div>
+                    <div class="bg-green-500 bg-opacity-20 p-3 rounded-full">
+                        <i class="fas fa-utensils text-green-500 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stats-card p-5 glow-on-hover">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-gray-400 text-sm">Ticket Promedio</p>
+                        <h3 class="text-2xl font-bold mt-1" id="average-ticket">$0</h3>
+                        <p class="text-green-400 text-sm mt-2 flex items-center" id="ticket-change">
+                            <i class="fas fa-caret-up mr-1"></i> 0%
+                        </p>
+                    </div>
+                    <div class="bg-purple-500 bg-opacity-20 p-3 rounded-full">
+                        <i class="fas fa-receipt text-purple-500 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <h2 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-chart-bar text-amber-500 mr-2"></i> Tendencia de Ventas
+        </h2>
+        <div class="chart-container mb-6 glow-on-hover">
+            <canvas id="salesChart"></canvas>
+        </div>
+        
+        <h2 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-chair text-amber-500 mr-2"></i> Órdenes por Mesa
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6 flex-grid" id="orders-by-table-cards">
+        </div>
+
+        <h2 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-table text-amber-500 mr-2"></i> Desempeño por Mesa (Detalle)
+        </h2>
+        <div class="bg-gray-800 rounded-lg overflow-hidden mb-6 glow-on-hover">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="bg-gray-700 text-left">
+                            <th class="py-3 px-4">Mesa</th>
+                            <th class="py-3 px-4">Órdenes</th>
+                            <th class="py-3 px-4">Ventas</th>
+                            <th class="py-3 px-4">Promedio</th>
+                            <th class="py-3 px-4">% Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tables-performance">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <h2 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-clock text-amber-500 mr-2"></i> Horario Pico
+        </h2>
+        <div class="chart-container mb-6 glow-on-hover">
+            <canvas id="peakHoursChart"></canvas>
+        </div>
+    </div>
+
+    <div class="fixed bottom-0 left-0 right-0 bg-gray-800 flex justify-around py-3 z-10"> 
+        <button class="nav-btn flex flex-col items-center active" data-tab="dashboard"> 
+            <i class="fas fa-chart-pie text-xl mb-1"></i>
+            <span class="text-xs">Dashboard</span>
+        </button>
+        <a href="inventario.html" class="nav-btn flex flex-col items-center" data-tab="inventory">
+            <i class="fas fa-boxes text-xl mb-1"></i>
+            <span class="text-xs">Inventario</span>
+        </a>
+    </div>
+
+    <div id="date-range-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 class="text-xl font-bold mb-4">Seleccionar Rango de Fechas</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Fecha Inicio</label>
+                    <input type="date" id="start-date" class="w-full bg-gray-700 rounded-lg p-2 text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Fecha Fin</label>
+                    <input type="date" id="end-date" class="w-full bg-gray-700 rounded-lg p-2 text-white">
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button id="cancel-date-range" class="bg-gray-700 text-white px-4 py-2 rounded-lg">Cancelar</button>
+                <button id="apply-date-range" class="bg-amber-600 text-white px-4 py-2 rounded-lg">Aplicar</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // Configuración de Firebase (LA MISMA QUE USASTE EN login.html Y inventario.html)
+    const firebaseConfig = {
+        apiKey: "AIzaSyDi4WBHRGgXMp_rtPvV9IDw3foEjtr0L2o",
+        authDomain: "tacosms-acbb2.firebaseapp.com",
+        databaseURL: "https://tacosms-acbb2-default-rtdb.firebaseio.com",
+        projectId: "tacosms-acbb2",
+        storageBucket: "tacosms-acbb2.appspot.com",
+        messagingSenderId: "701143542092",
+        appId: "1:701143542092:web:29f1d59ffe2751a3c207e9"
+    };
+
+    // Inicializar Firebase
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const database = firebase.database();
+    const auth = firebase.auth(); // Inicializar Firebase Auth
+
+    // --- Protección de Ruta y Lógica de Logout ---
+    const mainContent = document.getElementById('mainContent');
+
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            // Usuario está logueado.
+            console.log("Usuario autenticado:", user.uid);
+            // Verificar rol (opcional aquí, pero bueno para consistencia si esta es solo para gerentes)
+            database.ref('/userRoles/' + user.uid + '/role').once('value').then(snapshot => {
+                const role = snapshot.val();
+                if (role === 'gerente') {
+                    console.log("Rol verificado: gerente. Mostrando contenido.");
+                    mainContent.classList.remove('opacity-0'); // Muestra el contenido
+                    initializeDashboard(); // Llama a la función que inicializa el dashboard
+                } else {
+                    console.warn("Rol no autorizado para esta vista:", role);
+                    alert("No tienes permiso para acceder a esta página.");
+                    auth.signOut().then(() => {
+                        window.location.href = 'login.html';
+                    });
+                }
+            }).catch(error => {
+                console.error("Error al verificar rol:", error);
+                alert("Error al verificar tu rol. Se cerrará la sesión.");
+                auth.signOut().then(() => {
+                    window.location.href = 'login.html';
+                });
+            });
+
+        } else {
+            // No hay usuario logueado. Redirigir a login.html
+            console.log("Usuario no autenticado, redirigiendo a login.html...");
+            window.location.href = 'login.html';
+        }
+    });
+
+    const logoutButton = document.getElementById('logoutButton');
+    if (logoutButton) {
+        logoutButton.addEventListener('click', () => {
+            auth.signOut().then(() => {
+                console.log("Cierre de sesión exitoso.");
+                alert("Has cerrado sesión.");
+                window.location.href = 'login.html';
+            }).catch((error) => {
+                console.error("Error al cerrar sesión:", error);
+                alert("Error al cerrar sesión: " + error.message);
+            });
+        });
+    }
+    
+    // --- INICIO DEL CÓDIGO ORIGINAL DEL DASHBOARD ---
+    // Variables para los gráficos
+    let salesChart, peakHoursChart; 
+    
+    const appState = {
+        currentTimeframe: 'hoy',
+        startDate: null,
+        endDate: null,
+        ordersData: [],
+        previousData: [],
+        ordersByIndividualTable: {}
+    };
+
+    function formatMoney(amount) {
+        return '$' + amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+    }
+
+    function formatDate(date) {
+        const offset = date.getTimezoneOffset(); 
+        const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        return localDate.toLocaleDateString('es-MX', options);
+    }
+
+    function updateCurrentDate() {
+        const el = document.getElementById('current-date');
+        if(el) el.textContent = formatDate(new Date());
+    }
+
+    function getDateRange(timeframe) {
+        const now = new Date();
+        let start, end = new Date(now);
+        now.setHours(0, 0, 0, 0); 
+
+        switch(timeframe) {
+            case 'hoy':
+                start = new Date(now);
+                end = new Date(now); 
+                end.setHours(23, 59, 59, 999);
+                break;
+            case 'semana':
+                start = new Date(now);
+                start.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1)); 
+                start.setHours(0, 0, 0, 0);
+                end = new Date(start);
+                end.setDate(start.getDate() + 6); 
+                end.setHours(23, 59, 59, 999);
+                break;
+            case 'mes':
+                start = new Date(now.getFullYear(), now.getMonth(), 1);
+                end = new Date(now.getFullYear(), now.getMonth() + 1, 0); 
+                end.setHours(23, 59, 59, 999);
+                break;
+            case 'año':
+                start = new Date(now.getFullYear(), 0, 1);
+                end = new Date(now.getFullYear(), 11, 31);
+                end.setHours(23, 59, 59, 999);
+                break;
+            case 'personalizado':
+                if (!appState.startDate || !appState.endDate) { // Fallback si las fechas no están seteadas
+                    console.warn("Fechas personalizadas no establecidas, usando 'hoy' por defecto.");
+                    return getDateRange('hoy'); // Llama recursivamente con 'hoy'
+                }
+                const customStart = new Date(appState.startDate);
+                customStart.setHours(0, 0, 0, 0);
+                const customEnd = new Date(appState.endDate);
+                customEnd.setHours(23, 59, 59, 999);
+                return { start: customStart, end: customEnd };
+            default:
+                start = new Date(now);
+                start.setHours(0, 0, 0, 0);
+                end = new Date(now);
+                end.setHours(23, 59, 59, 999);
+        }
+        return { start, end };
+    }
+
+    async function loadData(timeframe) {
+        console.log("Cargando datos para:", timeframe);
+        const { start, end } = getDateRange(timeframe);
+        appState.currentTimeframe = timeframe;
+        
+        document.querySelectorAll('.timeframe-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.timeframe === timeframe) {
+                btn.classList.add('active');
+            }
+        });
+        
+        showLoading();
+        
+        try {
+            const currentData = await fetchOrdersData(start, end);
+            appState.ordersData = currentData;
+            
+            let previousStart, previousEnd;
+            if (timeframe === 'hoy') {
+                previousStart = new Date(start); previousStart.setDate(start.getDate() - 1);
+                previousEnd = new Date(end); previousEnd.setDate(end.getDate() - 1);
+            } else if (timeframe === 'semana') {
+                previousStart = new Date(start); previousStart.setDate(start.getDate() - 7);
+                previousEnd = new Date(end); previousEnd.setDate(end.getDate() - 7);
+            } else if (timeframe === 'mes') {
+                previousStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
+                previousEnd = new Date(start.getFullYear(), start.getMonth(), 0); 
+            } else if (timeframe === 'año') {
+                previousStart = new Date(start.getFullYear() - 1, 0, 1);
+                previousEnd = new Date(start.getFullYear() - 1, 11, 31);
+            }
+            
+            if (timeframe !== 'personalizado' && previousStart && previousEnd) { 
+                const previousData = await fetchOrdersData(previousStart, previousEnd);
+                appState.previousData = previousData;
+            } else {
+                appState.previousData = [];
+            }
+            processDataAndUpdateUI();
+        } catch (error) {
+            console.error('Error al cargar datos:', error);
+            // alert('Error al cargar datos. Por favor intente nuevamente.'); // Ya manejado en onAuthStateChanged
+        } finally {
+            hideLoading();
+        }
+    }
+
+    async function fetchOrdersData(startDate, endDate) {
+        // Asegurarse de que startDate y endDate sean objetos Date válidos
+        if (!(startDate instanceof Date) || !(endDate instanceof Date) || isNaN(startDate) || isNaN(endDate)) {
+            console.error("fetchOrdersData recibió fechas inválidas:", startDate, endDate);
+            return []; // Retornar arreglo vacío si las fechas no son válidas
+        }
+        const startStr = startDate.toISOString().split('T')[0];
+        const endStr = endDate.toISOString().split('T')[0];
+        
+        const snapshot = await database.ref('orders').orderByKey().startAt(startStr).endAt(endStr).once('value');
+        const ordersData = snapshot.val();
+        const filteredOrders = [];
+        
+        if (ordersData) {
+            for (const dateKey in ordersData) {
+                // Doble verificación, aunque Firebase ya debería haber filtrado por rango
+                // if (dateKey >= startStr && dateKey <= endStr) { 
+                    const ordersForDate = ordersData[dateKey];
+                    for (const orderId in ordersForDate) {
+                        const order = ordersForDate[orderId];
+                        if (order.items && typeof order.items === 'object' && !Array.isArray(order.items)) {
+                            order.items = Object.values(order.items);
+                        } else if (!order.items) {
+                            order.items = []; 
+                        }
+                        filteredOrders.push({ ...order, date: dateKey, orderId: orderId });
+                    }
+                // }
+            }
+        }
+        return filteredOrders;
+    }
+
+    function processDataAndUpdateUI() {
+        const orders = appState.ordersData;
+        const previousOrders = appState.previousData;
+        
+        const totalSales = orders.reduce((sum, order) => sum + (order.total || 0), 0); 
+        const totalOrders = orders.length;
+        let totalProducts = 0;
+        orders.forEach(order => {
+            if (order.items && Array.isArray(order.items)) {
+                totalProducts += order.items.reduce((sum, item) => sum + (item.quantity || 0), 0); // Sumar cantidades de items
+            }
+        });
+        const averageTicket = totalOrders > 0 ? totalSales / totalOrders : 0;
+        
+        let previousTotalSales = 0, previousTotalOrders = 0, previousTotalProducts = 0, previousAverageTicket = 0;
+        if (previousOrders.length > 0) {
+            previousTotalSales = previousOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+            previousTotalOrders = previousOrders.length;
+            previousOrders.forEach(order => {
+                if (order.items && Array.isArray(order.items)) {
+                     previousTotalProducts += order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+                }
+            });
+            previousAverageTicket = previousTotalOrders > 0 ? previousTotalSales / previousTotalOrders : 0;
+        }
+        
+        const salesChange = previousTotalSales > 0 ? ((totalSales - previousTotalSales) / previousTotalSales * 100) : (totalSales > 0 ? 100 : 0);
+        const ordersChange = previousTotalOrders > 0 ? ((totalOrders - previousTotalOrders) / previousTotalOrders * 100) : (totalOrders > 0 ? 100 : 0);
+        const productsChange = previousTotalProducts > 0 ? ((totalProducts - previousTotalProducts) / previousTotalProducts * 100) : (totalProducts > 0 ? 100 : 0);
+        const ticketChange = previousAverageTicket > 0 ? ((averageTicket - previousAverageTicket) / previousAverageTicket * 100) : (averageTicket > 0 ? 100 : 0);
+        
+        document.getElementById('total-sales').textContent = formatMoney(totalSales);
+        document.getElementById('total-orders').textContent = totalOrders;
+        document.getElementById('total-products').textContent = totalProducts;
+        document.getElementById('average-ticket').textContent = formatMoney(averageTicket);
+        
+        updateChangeIndicator('sales-change', salesChange.toFixed(1));
+        updateChangeIndicator('orders-change', ordersChange.toFixed(1));
+        updateChangeIndicator('products-change', productsChange.toFixed(1));
+        updateChangeIndicator('ticket-change', ticketChange.toFixed(1));
+        
+        processOrdersByIndividualTable(orders); 
+        processChartData(orders); 
+        processTablesPerformance(orders, totalSales); 
+    }
+
+    function updateChangeIndicator(elementId, changePercent) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        const change = parseFloat(changePercent);
+        let iconClass = 'fa-equals'; let colorClass = 'text-gray-400';
+        if (change > 0) { iconClass = 'fa-caret-up'; colorClass = 'text-green-400'; }
+        else if (change < 0) { iconClass = 'fa-caret-down'; colorClass = 'text-red-400'; }
+        element.innerHTML = `<i class="fas ${iconClass} mr-1"></i> ${Math.abs(change)}%`;
+        element.className = `${colorClass} text-sm mt-2 flex items-center`;
+    }
+
+    function processOrdersByIndividualTable(orders) {
+        appState.ordersByIndividualTable = {};
+        orders.forEach(order => {
+            const table = order.table || 'Takeout'; // Asume 'Takeout' si no hay mesa
+            if (!appState.ordersByIndividualTable[table]) {
+                appState.ordersByIndividualTable[table] = 0;
+            }
+            appState.ordersByIndividualTable[table]++;
+        });
+        updateOrdersByIndividualTableUI(appState.ordersByIndividualTable);
+    }
+
+    function updateOrdersByIndividualTableUI(data) {
+        const container = document.getElementById('orders-by-table-cards');
+        if(!container) return;
+        container.innerHTML = ''; 
+        const sortedTables = Object.keys(data).sort((a, b) => data[b] - data[a]); 
+        sortedTables.forEach(table => {
+            const card = document.createElement('div');
+            card.className = 'stats-card p-4 glow-on-hover';
+            card.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-gray-400 text-sm">Mesa #${table}</p>
+                        <h3 class="text-2xl font-bold mt-1">${data[table]}</h3>
+                        <p class="text-gray-400 text-sm">órdenes</p>
+                    </div>
+                    <div class="bg-blue-500 bg-opacity-20 p-3 rounded-full">
+                        <i class="fas fa-chair text-blue-500 text-xl"></i>
+                    </div>
+                </div>`;
+            container.appendChild(card);
+        });
+        if (sortedTables.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-center col-span-full py-4">No hay órdenes por mesa en este período.</p>';
+        }
+    }
+
+    function processChartData(orders) {
+        const salesByDay = {}; const ordersByHour = Array(24).fill(0);
+        orders.forEach(order => {
+            const orderDateVal = order.date.includes('T') ? order.date.split('T')[0] : order.date; // Manejar si ya tiene T00:00:00
+            const orderDate = new Date(orderDateVal + 'T00:00:00'); // Asegurar que se interprete como local al inicio del día
+            const dayKey = orderDate.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }); 
+            if (!salesByDay[dayKey]) salesByDay[dayKey] = 0;
+            salesByDay[dayKey] += (order.total || 0);
+            const timestamp = order.timestamp;
+            if (timestamp) {
+                const orderTime = new Date(timestamp);
+                ordersByHour[orderTime.getHours()]++;
+            }
+        });
+        updateSalesChart(Object.keys(salesByDay), Object.values(salesByDay));
+        updatePeakHoursChart(ordersByHour);
+    }
+
+    function updateSalesChart(labels, data) {
+        const ctx = document.getElementById('salesChart')?.getContext('2d');
+        if (!ctx) return;
+        if (salesChart) salesChart.destroy();
+        salesChart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Ventas', data, backgroundColor: 'rgba(217, 119, 6, 0.7)', borderColor: 'rgba(217, 119, 6, 1)', borderWidth: 1, borderRadius: 4 }] },
+            options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => formatMoney(c.raw) }}}, scales: { y: { beginAtZero: true, ticks: { callback: v => formatMoney(v) }}} }
+        });
+    }
+
+    function updatePeakHoursChart(data) {
+        const ctx = document.getElementById('peakHoursChart')?.getContext('2d');
+        if (!ctx) return;
+        const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+        if (peakHoursChart) peakHoursChart.destroy();
+        peakHoursChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets: [{ label: 'Órdenes por hora', data, backgroundColor: 'rgba(217, 119, 6, 0.2)', borderColor: 'rgba(217, 119, 6, 1)', borderWidth: 2, tension: 0.4, fill: true }] },
+            options: { responsive: true, plugins: { legend: { display: false }}, scales: { y: { beginAtZero: true, ticks: { precision: 0 }}}}
+        });
+    }
+
+    function processTablesPerformance(orders, totalSales) {
+        const tablesData = {};
+        orders.forEach(order => {
+            const table = order.table || 'Takeout';
+            if (!tablesData[table]) tablesData[table] = { orders: 0, sales: 0 };
+            tablesData[table].orders++;
+            tablesData[table].sales += (order.total || 0); 
+        });
+        const tablesArray = Object.keys(tablesData).map(table => {
+            const d = tablesData[table]; const avg = d.orders > 0 ? d.sales / d.orders : 0;
+            return { table, orders: d.orders, sales: d.sales, average: avg, percentage: totalSales > 0 ? (d.sales / totalSales * 100) : 0 };
+        });
+        tablesArray.sort((a, b) => b.sales - a.sales);
+        updateTablesPerformanceUI(tablesArray);
+    }
+
+    function updateTablesPerformanceUI(tablesData) {
+        const tbody = document.getElementById('tables-performance');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        tablesData.forEach(data => {
+            const row = document.createElement('tr');
+            row.className = 'border-b border-gray-700 hover:bg-gray-700';
+            row.innerHTML = `
+                <td class="py-3 px-4 font-medium">${data.table}</td> <td class="py-3 px-4">${data.orders}</td>
+                <td class="py-3 px-4">${formatMoney(data.sales)}</td> <td class="py-3 px-4">${formatMoney(data.average)}</td>
+                <td class="py-3 px-4">
+                    <div class="w-full bg-gray-600 rounded-full h-2"><div class="bg-amber-500 h-2 rounded-full" style="width: ${data.percentage.toFixed(1)}%"></div></div>
+                    <span class="text-xs">${data.percentage.toFixed(1)}%</span>
+                </td>`;
+            tbody.appendChild(row);
+        });
+    }
+
+    function showLoading() { /* Implementar si es necesario */ }
+    function hideLoading() { /* Implementar si es necesario */ }
+
+    // --- Función para inicializar el dashboard y sus listeners ---
+    function initializeDashboard() {
+        updateCurrentDate();
+        loadData('hoy'); // Carga inicial de datos
+        
+        document.querySelectorAll('.timeframe-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const timeframe = btn.dataset.timeframe;
+                if (timeframe === 'personalizado') {
+                    document.getElementById('date-range-modal').classList.remove('hidden');
+                } else {
+                    loadData(timeframe);
+                }
+            });
+        });
+        
+        const cancelDateRangeBtn = document.getElementById('cancel-date-range');
+        if (cancelDateRangeBtn) {
+            cancelDateRangeBtn.addEventListener('click', () => {
+                document.getElementById('date-range-modal').classList.add('hidden');
+            });
+        }
+        
+        const applyDateRangeBtn = document.getElementById('apply-date-range');
+        if (applyDateRangeBtn) {
+            applyDateRangeBtn.addEventListener('click', () => {
+                const startDateInput = document.getElementById('start-date').value;
+                const endDateInput = document.getElementById('end-date').value;
+                if (startDateInput && endDateInput) {
+                    appState.startDate = new Date(startDateInput + 'T00:00:00'); // Especificar hora para evitar problemas de zona
+                    appState.endDate = new Date(endDateInput + 'T23:59:59');   // Especificar hora para evitar problemas de zona
+                    if (appState.startDate > appState.endDate) {
+                        alert('La fecha de inicio no puede ser posterior a la fecha de fin.'); return;
+                    }
+                    appState.currentTimeframe = 'personalizado';
+                    document.getElementById('date-range-modal').classList.add('hidden');
+                    loadData('personalizado');
+                } else {
+                    alert('Por favor seleccione ambas fechas');
+                }
+            });
+        }
+        
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.addEventListener('click', (event) => {
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                event.currentTarget.classList.add('active');
+            });
+        });
+
+        // El botón de dashboard ya está activo por defecto en el HTML
+        // const dashboardButton = document.querySelector('.nav-btn[data-tab="dashboard"]');
+        // if (dashboardButton && !dashboardButton.classList.contains('active')) { // Evitar re-activar si ya lo está
+        //    dashboardButton.classList.add('active');
+        // }
+    }
+
+    // La inicialización del dashboard (initializeDashboard()) se llama ahora
+    // dentro del chequeo de onAuthStateChanged si el usuario es gerente.
+</script>
+</body>
+</html>

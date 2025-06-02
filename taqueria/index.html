@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenido a Tacos MS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary-color: #d97706;
+            --secondary-color: #f59e0b;
+            --dark-bg: #1a1a1a;
+            --text-light: #f0f0f0;
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-light);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            text-align: center;
+            padding: 1rem;
+        }
+        .logo-text {
+            font-size: 3rem; /* Equivalente a text-5xl o text-6xl en Tailwind */
+            font-weight: 700; /* font-bold */
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        @media (min-width: 640px) { /* sm breakpoint */
+            .logo-text {
+                font-size: 4.5rem; /* text-7xl */
+            }
+        }
+        .tagline {
+            font-size: 1.125rem; /* text-lg */
+            color: var(--secondary-color);
+            margin-bottom: 2.5rem;
+        }
+        .login-icon-link {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 0.75rem; /* rounded-xl */
+            text-decoration: none;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+        }
+        .login-icon-link:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-3px);
+        }
+        .login-icon-link i {
+            font-size: 2.25rem; /* text-4xl */
+            margin-bottom: 0.5rem;
+        }
+        .login-icon-link span {
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 500; /* font-medium */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container mx-auto">
+        <div class="mb-8">
+            <span class="text-6xl" role="img" aria-label="taco emoji">🌮</span>
+        </div>
+        <h1 class="logo-text">
+            Tacos MS
+        </h1>
+        <p class="tagline">
+            ¡Auténtico sabor, siempre cerca de ti!
+        </p>
+        
+        <a href="login.html" class="login-icon-link shadow-lg">
+            <i class="fas fa-sign-in-alt"></i>
+            <span>Iniciar Sesión</span>
+        </a>
+    </div>
+
+</body>
+</html>

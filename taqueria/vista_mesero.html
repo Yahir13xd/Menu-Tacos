@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vista Mesero - Taquería MS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        :root {
+            --primary: #d97706;
+            --secondary: #f59e0b;
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #1a1a1a;
+            color: white;
+        }
+        .item-card {
+            background: #2d2d2d;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+        .item-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        .quantity-selector {
+            display: flex;
+            align-items: center;
+            background: #3d3d3d;
+            border-radius: 20px;
+            padding: 5px 10px;
+        }
+        .quantity-btn {
+            background: #4d4d4d;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .quantity-btn:hover {
+            background: var(--primary);
+        }
+        .option-checkbox {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #555;
+            border-radius: 4px;
+            background-color: transparent;
+            cursor: pointer;
+            position: relative;
+        }
+        .option-checkbox:checked {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+        .option-checkbox:checked::after {
+            content: "✓";
+            position: absolute;
+            color: white;
+            font-size: 12px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .nav-btn {
+            color: #777;
+            transition: all 0.3s;
+        }
+        .nav-btn.active {
+            color: var(--primary);
+        }
+        .nav-btn.active svg, .nav-btn.active i {
+            fill: var(--primary);
+            color: var(--primary);
+        }
+        .add-to-order-btn {
+            background: var(--primary);
+            transition: all 0.3s;
+        }
+        .add-to-order-btn:hover {
+            background: #b65c04;
+            transform: translateY(-2px);
+        }
+        .category-btn.active {
+            background-color: var(--primary);
+        }
+        .table-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            transition: all 0.3s;
+        }
+        .table-btn.active {
+            background-color: var(--primary);
+            transform: scale(1.05);
+        }
+        .table-btn.has-order {
+            background-color: #3d3d3d;
+            border: 2px solid var(--primary);
+        }
+        .order-item {
+            border-bottom: 1px solid #3d3d3d;
+            padding: 12px 0;
+        }
+        @media (min-width: 768px) {
+            #product-list, #tables-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .item-card {
+                max-width: 100%;
+            }
+        }
+        @media (min-width: 1024px) {
+            #product-list, #tables-container {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-20">
+    <div class="bg-black py-4 px-6 flex justify-between items-center sticky top-0 z-20">
+        <h1 class="text-xl font-bold text-amber-500">Taquería MS - Mesero</h1>
+        <div class="flex items-center space-x-4">
+            <span id="current-table" class="text-sm bg-amber-600 px-3 py-1 rounded-full">Seleccione mesa</span>
+            <button id="logoutButton" title="Cerrar Sesión" class="text-white hover:text-red-500 transition-colors duration-150">
+                <i class="fas fa-sign-out-alt text-xl"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="main-content" class="opacity-0 transition-opacity duration-500">
+        <div id="menu-content">
+            <div class="px-4 py-3 overflow-x-auto whitespace-nowrap">
+                <div class="inline-flex space-x-3" id="category-buttons">
+                </div>
+            </div>
+            <div class="px-4 py-3 grid grid-cols-1 gap-4" id="product-list">
+            </div>
+            <div class="fixed bottom-20 right-4 z-10">
+                <button class="add-to-order-btn rounded-full p-4 shadow-lg" id="add-to-order-btn">
+                    <i class="fas fa-plus text-white text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="orders-content" class="hidden px-4 py-3">
+            <h2 class="text-2xl font-bold mb-4">Órdenes Activas</h2>
+            <div id="active-orders-list">
+            </div>
+        </div>
+
+        <div id="bill-content" class="hidden px-4 py-3">
+            <h2 class="text-2xl font-bold mb-4">Cuenta de Mesa</h2>
+            <div id="bill-details">
+            </div>
+        </div>
+
+        <div id="settings-content" class="hidden px-4 py-3">
+            <h2 class="text-2xl font-bold mb-4">Ajustes</h2>
+            <p class="text-gray-400">Configuración de la aplicación (Mesero)</p>
+        </div>
+    </div>
+
+    <div id="table-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 class="text-xl font-bold mb-4">Seleccionar Mesa</h2>
+            <div class="grid grid-cols-3 gap-4" id="tables-container">
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button id="confirm-table-btn" class="bg-amber-600 text-white px-4 py-2 rounded-lg">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="fixed bottom-0 left-0 right-0 bg-gray-800 flex justify-around py-3 z-20">
+        <button class="nav-btn active flex flex-col items-center" data-tab="menu">
+            <i class="fas fa-utensils text-xl mb-1"></i>
+            <span class="text-xs">Menú</span>
+        </button>
+        <button class="nav-btn flex flex-col items-center" data-tab="orders">
+            <i class="fas fa-clipboard-list text-xl mb-1"></i>
+            <span class="text-xs">Órdenes</span>
+        </button>
+        <button class="nav-btn flex flex-col items-center" data-tab="bill">
+            <i class="fas fa-cash-register text-xl mb-1"></i>
+            <span class="text-xs">Cuenta</span>
+        </button>
+        <button class="nav-btn flex flex-col items-center" data-tab="settings">
+            <i class="fas fa-cog text-xl mb-1"></i>
+            <span class="text-xs">Ajustes</span>
+        </button>
+    </div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyDi4WBHRGgXMp_rtPvV9IDw3foEjtr0L2o",
+        authDomain: "tacosms-acbb2.firebaseapp.com",
+        databaseURL: "https://tacosms-acbb2-default-rtdb.firebaseio.com",
+        projectId: "tacosms-acbb2",
+        storageBucket: "tacosms-acbb2.appspot.com",
+        messagingSenderId: "701143542092",
+        appId: "1:701143542092:web:29f1d59ffe2751a3c207e9"
+    };
+
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const database = firebase.database();
+    const auth = firebase.auth();
+    const mainPageContent = document.getElementById('main-content');
+
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            database.ref('/userRoles/' + user.uid + '/role').once('value').then(snapshot => {
+                const role = snapshot.val();
+                if (role === 'mesero') {
+                    if(mainPageContent) mainPageContent.classList.remove('opacity-0');
+                    initializeWaiterApp();
+                } else {
+                    alert("Acceso denegado. Esta vista es solo para meseros.");
+                    auth.signOut().then(() => {
+                        window.location.href = 'login.html';
+                    });
+                }
+            }).catch(error => {
+                alert("Error al verificar rol. Se cerrará la sesión.");
+                auth.signOut().then(() => {
+                    window.location.href = 'login.html';
+                });
+            });
+        } else {
+            window.location.href = 'login.html';
+        }
+    });
+
+    const logoutButton = document.getElementById('logoutButton');
+    if (logoutButton) {
+        logoutButton.addEventListener('click', () => {
+            auth.signOut().then(() => {
+                window.location.href = 'login.html';
+            }).catch((error) => {
+                alert("Error al cerrar sesión: " + error.message);
+            });
+        });
+    }
+
+    const { jsPDF } = window.jspdf;
+    const menuItems = {
+        tacos: [
+            { id: 1, name: "Bistec", price: 30, description: "Delicioso bistec de res a la plancha, bien sazonado" },
+            { id: 2, name: "Longaniza", price: 30, description: "Longaniza roja con un toque picosito" },
+            { id: 3, name: "Taco Campechano", price: 30, description: "Mezcla de bistec y longaniza" },
+            { id: 4, name: "Chuleta", price: 30, description: "Carne de chuleta con un dorado crujiente" },
+            { id: 5, name: "Enchilada", price: 30, description: "Carne de cerdo marinada en chile rojo" },
+            { id: 6, name: "Hawaiano", price: 32, description: "Bistec acompañado de piña dorada" },
+            { id: 7, name: "Alambre", price: 32, description: "Bistec con tocino, cebolla, pimientos y queso" }
+        ],
+        burritos: [
+            { id: 8, name: "Burrito de Bistec", price: 48, description: "Bistec de res jugoso en tortilla de harina" },
+            { id: 9, name: "Burrito de Longaniza", price: 48, description: "Longaniza bien dorada y picosita" },
+            { id: 10, name: "Burrito Campechano", price: 48, description: "Mezcla de bistec y longaniza en tortilla" },
+            { id: 11, name: "Burrito de Chuleta", price: 48, description: "Chuleta de cerdo a la plancha" },
+            { id: 12, name: "Burrito de Enchilada", price: 48, description: "Carne adobada al estilo enchilado" },
+            { id: 13, name: "Burrito de Alambre", price: 47, description: "Bistec, tocino, cebolla, pimientos y queso" },
+            { id: 14, name: "Burrito Supremo", price: 75, description: "El rey de los burritos con 7 ingredientes" }
+        ],
+        bebidas: [
+            { id: 15, name: "7UP", price: 25, description: "Refresco de limón-lima sin cafeína" },
+            { id: 16, name: "Manzanita", price: 25, description: "Refresco de manzana con sabor dulce" },
+            { id: 17, name: "Sangría Señorial", price: 25, description: "Refresco con sabor a uva y toques especiados" },
+            { id: 18, name: "Mirinda", price: 25, description: "Sabor a naranja intenso y dulce" },
+            { id: 19, name: "Squirt", price: 25, description: "Refresco de toronja con toque ácido" },
+            { id: 20, name: "Pepsi", price: 25, description: "Refresco de cola con sabor dulce" }
+        ]
+    };
+    const appState = {
+        currentTable: null,
+        orders: {}, 
+        currentOrder: [], 
+        orderCounter: 0,
+        selectedItems: {}
+    };
+
+    function generateCategoryButtons() {
+        const categoryButtonsContainer = document.getElementById('category-buttons');
+        categoryButtonsContainer.innerHTML = ''; 
+        for (const category in menuItems) {
+            const categoryBtn = document.createElement('button');
+            categoryBtn.classList.add('category-btn', 'px-4', 'py-2', 'rounded-full', 'bg-gray-700', 'text-white', 'font-medium');
+            categoryBtn.dataset.category = category;
+            categoryBtn.textContent = category.charAt(0).toUpperCase() + category.slice(1); 
+            categoryBtn.addEventListener('click', function() {
+                document.querySelectorAll('.category-btn').forEach(btn => {
+                    btn.classList.remove('bg-amber-600', 'active');
+                    btn.classList.add('bg-gray-700');
+                });
+                this.classList.remove('bg-gray-700');
+                this.classList.add('bg-amber-600', 'active');
+                loadProducts(category);
+            });
+            categoryButtonsContainer.appendChild(categoryBtn);
+        }
+    }
+    function getCategoryIcon(category) {
+        switch(category) {
+            case 'tacos': return '<i class="fas fa-utensils text-4xl text-amber-500 p-2 bg-gray-700 rounded-lg"></i>';
+            case 'burritos': return '<i class="fas fa-burrito text-4xl text-amber-500 p-2 bg-gray-700 rounded-lg"></i>';
+            case 'bebidas': return '<i class="fas fa-glass-whiskey text-4xl text-amber-500 p-2 bg-gray-700 rounded-lg"></i>';
+            default: return '<i class="fas fa-question text-4xl text-amber-500 p-2 bg-gray-700 rounded-lg"></i>';
+        }
+    }
+    function generateCustomizationOptions(category, itemId) {
+        let optionsHTML = '';
+        if (category === 'tacos' || category === 'burritos') {
+            optionsHTML = `<div class="mb-4"><h4 class="font-medium mb-2">Ingredientes</h4><div class="space-y-2">
+            <label class="flex items-center"><input type="checkbox" class="option-checkbox mr-2" name="ingrediente-${itemId}" value="salsa-roja"><span>Salsa Roja</span></label>
+            <label class="flex items-center"><input type="checkbox" class="option-checkbox mr-2" name="ingrediente-${itemId}" value="salsa-verde"><span>Salsa Verde</span></label>
+            <label class="flex items-center"><input type="checkbox" class="option-checkbox mr-2" name="ingrediente-${itemId}" value="cebolla"><span>Cebolla</span></label>
+            </div></div>`;
+        } else if (category === 'bebidas') {
+            optionsHTML = `<div class="mb-4"><h4 class="font-medium mb-2">Opciones</h4><div class="space-y-2">
+            <label class="flex items-center"><input type="checkbox" class="option-checkbox mr-2" name="opcion-${itemId}" value="hielo"><span>Con hielo</span></label>
+            </div></div>`;
+        }
+        optionsHTML += `<div><h4 class="font-medium mb-2">Notas especiales</h4>
+        <textarea class="w-full bg-gray-700 rounded-lg p-3 text-sm text-white placeholder-gray-400" rows="2" placeholder="Ej: Sin cebolla, extra salsa..."></textarea>
+        </div>`;
+        return optionsHTML;
+    }
+    function generateMenuItem(item, category) {
+        const currentQuantity = appState.selectedItems[`${category}-${item.id}`] ? appState.selectedItems[`${category}-${item.id}`].quantity : 0;
+        return `<div class="item-card p-4" data-category="${category}" data-id="${item.id}"><div class="flex items-start">
+        ${getCategoryIcon(category)}<div class="ml-4 flex-1"><div class="flex justify-between">
+        <h3 class="font-bold text-lg">${item.name}</h3><span class="font-bold text-amber-500">$${item.price}</span></div>
+        <p class="text-gray-400 text-sm mt-1">${item.description}</p><div class="flex justify-between items-center mt-3">
+        <div class="quantity-selector"><button class="quantity-btn minus" data-id="${item.id}" data-category="${category}">-</button>
+        <span class="quantity mx-3" data-id="${item.id}" data-category="${category}">${currentQuantity}</span>
+        <button class="quantity-btn plus" data-id="${item.id}" data-category="${category}">+</button></div>
+        <button class="toggle-details text-amber-500 text-sm font-medium">Personalizar <i class="fas fa-chevron-down ml-1"></i></button></div>
+        <div class="details mt-3 hidden">${generateCustomizationOptions(category, item.id)}</div></div></div></div>`;
+    }
+    function loadProducts(category) {
+        const productList = document.getElementById('product-list');
+        productList.innerHTML = '';
+        if (menuItems[category]) {
+            menuItems[category].forEach(item => {
+                productList.innerHTML += generateMenuItem(item, category);
+            });
+        }
+        activateEventListeners();
+        Object.keys(appState.selectedItems).forEach(key => {
+            const item = appState.selectedItems[key];
+            const card = document.querySelector(`.item-card[data-id="${item.id}"][data-category="${item.category}"]`);
+            if (card) {
+                const notesTextarea = card.querySelector('textarea');
+                if (notesTextarea) notesTextarea.value = item.customizations.notes || '';
+                item.customizations.ingredients.forEach(ing => {
+                    const checkbox = card.querySelector(`input[type="checkbox"][value="${ing}"]`);
+                    if (checkbox) checkbox.checked = true;
+                });
+            }
+        });
+    }
+    function showTablesModal() {
+        const modal = document.getElementById('table-modal');
+        const tablesContainer = document.getElementById('tables-container');
+        tablesContainer.innerHTML = '';
+        for (let i = 1; i <= 6; i++) {
+            const hasOrder = appState.orders[i] && appState.orders[i].length > 0;
+            tablesContainer.innerHTML += `<button class="table-btn ${hasOrder ? 'has-order' : ''} ${appState.currentTable === i ? 'active' : ''}" data-table="${i}">
+            ${i}${hasOrder ? '<span class="absolute top-0 right-0 w-3 h-3 bg-amber-500 rounded-full"></span>' : ''}</button>`;
+        }
+        modal.classList.remove('hidden');
+        document.querySelectorAll('.table-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.table-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                appState.currentTable = parseInt(this.dataset.table);
+            });
+        });
+    }
+    function confirmTableSelection() {
+        const modal = document.getElementById('table-modal');
+        const currentTableSpan = document.getElementById('current-table');
+        if (appState.currentTable) {
+            currentTableSpan.textContent = `Mesa #${appState.currentTable}`;
+            modal.classList.add('hidden');
+            if (appState.orders[appState.currentTable]) {
+                appState.currentOrder = [...appState.orders[appState.currentTable]];
+            } else {
+                appState.currentOrder = [];
+            }
+            appState.selectedItems = {};
+            const activeCategoryBtn = document.querySelector('.category-btn.active');
+            if (activeCategoryBtn) {
+                loadProducts(activeCategoryBtn.dataset.category);
+            } else {
+                loadProducts('tacos');
+            }
+        } else {
+            alert('Por favor seleccione una mesa');
+        }
+    }
+    async function saveOrderToFirebase(tableNumber, orderItems) {
+        try {
+            const now = new Date();
+            const dateKey = now.toISOString().split('T')[0]; 
+            const counterRef = database.ref(`counters/${dateKey}`);
+            const counterSnapshot = await counterRef.once('value');
+            let currentCounter = counterSnapshot.exists() ? counterSnapshot.val() : 0;
+            currentCounter++;
+            await counterRef.set(currentCounter);
+            const orderData = {
+                table: tableNumber,
+                items: orderItems,
+                total: orderItems.reduce((sum, item) => sum + item.price, 0),
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                orderNumber: currentCounter,
+                date: dateKey,
+                status: "active" 
+            };
+            const newOrderRef = database.ref(`orders/${dateKey}/${currentCounter}`);
+            await newOrderRef.set(orderData);
+            return currentCounter;
+        } catch (error) {
+            console.error('Error al guardar la orden en Firebase:', error);
+            throw error;
+        }
+    }
+    async function addItemsToOrder() {
+        if (!appState.currentTable) {
+            alert('Por favor seleccione una mesa primero');
+            showTablesModal();
+            return;
+        }
+        const selectedItemsToSave = [];
+        let itemsAddedCount = 0;
+        for (const key in appState.selectedItems) {
+            const itemData = appState.selectedItems[key];
+            if (itemData.quantity > 0) {
+                itemsAddedCount++;
+                const card = document.querySelector(`.item-card[data-id="${itemData.id}"][data-category="${itemData.category}"]`);
+                let currentCustomizations = { ingredients: [], notes: '' };
+                if (card) {
+                    card.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+                        currentCustomizations.ingredients.push(checkbox.value);
+                    });
+                    const notesTextarea = card.querySelector('textarea');
+                    if (notesTextarea) currentCustomizations.notes = notesTextarea.value;
+                }
+                for (let i = 0; i < itemData.quantity; i++) {
+                    selectedItemsToSave.push({
+                        id: itemData.id, name: itemData.name, price: itemData.price,
+                        customizations: { ...currentCustomizations } 
+                    });
+                }
+            }
+        }
+        if (itemsAddedCount === 0) {
+            alert('Por favor seleccione al menos un item (cantidad mayor a 0)');
+            return;
+        }
+        appState.orders[appState.currentTable] = [ ...(appState.orders[appState.currentTable] || []), ...selectedItemsToSave ];
+        try {
+            const orderNumber = await saveOrderToFirebase(appState.currentTable, selectedItemsToSave);
+            alert(`Se agregaron ${itemsAddedCount} tipos de productos (${selectedItemsToSave.length} unidades) a la orden de la mesa #${appState.currentTable}`);
+        } catch (error) {
+            alert('Error al guardar la orden. Por favor intente nuevamente.');
+            console.error(error);
+        }
+        document.querySelectorAll('.quantity').forEach(el => el.textContent = '0');
+        document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        document.querySelectorAll('textarea').forEach(ta => ta.value = '');
+        appState.selectedItems = {}; 
+    }
+    function loadActiveOrders() {
+        const ordersList = document.getElementById('active-orders-list');
+        ordersList.innerHTML = '';
+        let hasOrders = false;
+        for (let table = 1; table <= 6; table++) {
+            if (appState.orders[table] && appState.orders[table].length > 0) {
+                hasOrders = true;
+                const total = appState.orders[table].reduce((sum, item) => sum + item.price, 0);
+                ordersList.innerHTML += `<div class="bg-gray-800 rounded-lg p-4 mb-4">
+                <div class="flex justify-between items-center mb-2"><h3 class="font-bold text-lg">Mesa #${table}</h3>
+                <span class="text-amber-500 font-bold">$${total.toFixed(2)}</span></div>
+                <div class="text-sm text-gray-400 mb-3">${appState.orders[table].length} items</div>
+                <div class="flex space-x-2">
+                <button class="edit-order-btn bg-gray-700 px-3 py-1 rounded-lg text-sm" data-table="${table}"><i class="fas fa-edit mr-1"></i> Editar</button>
+                <button class="view-bill-btn bg-amber-600 px-3 py-1 rounded-lg text-sm" data-table="${table}"><i class="fas fa-file-invoice-dollar mr-1"></i> Cuenta</button>
+                </div></div>`;
+            }
+        }
+        if (!hasOrders) {
+            ordersList.innerHTML = '<p class="text-gray-400 text-center py-8">No hay órdenes activas</p>';
+        }
+        document.querySelectorAll('.edit-order-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const table = parseInt(this.dataset.table);
+                appState.currentTable = table;
+                appState.currentOrder = [...appState.orders[table]]; 
+                document.getElementById('current-table').textContent = `Mesa #${table}`;
+                switchTab('menu');
+            });
+        });
+        document.querySelectorAll('.view-bill-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const table = parseInt(this.dataset.table);
+                loadBillDetails(table);
+                switchTab('bill');
+            });
+        });
+    }
+    function loadBillDetails(table) {
+        const billDetails = document.getElementById('bill-details');
+        if (!appState.orders[table] || appState.orders[table].length === 0) {
+            billDetails.innerHTML = '<p class="text-gray-400 text-center py-8">No hay items en esta orden</p>';
+            return;
+        }
+        const groupedItems = {};
+        appState.orders[table].forEach(item => {
+            const key = `${item.id}-${JSON.stringify(item.customizations)}`; 
+            if (!groupedItems[key]) {
+                groupedItems[key] = { ...item, quantity: 1 };
+            } else {
+                groupedItems[key].quantity++;
+            }
+        });
+        const total = appState.orders[table].reduce((sum, item) => sum + item.price, 0);
+        let html = `<div class="bg-gray-800 rounded-lg p-4 mb-4"><h3 class="font-bold text-xl mb-4">Mesa #${table}</h3><div class="space-y-4">`;
+        Object.values(groupedItems).forEach(item => {
+            html += `<div class="flex justify-between items-start border-b border-gray-700 pb-3"><div>
+            <div class="font-medium">${item.name} x${item.quantity}</div>
+            ${item.customizations && item.customizations.ingredients && item.customizations.ingredients.length > 0 ?
+            `<div class="text-sm text-gray-400">${item.customizations.ingredients.map(ing => {
+            return ing.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            }).join(', ')}</div>` : ''}
+            ${item.customizations && item.customizations.notes ?
+            `<div class="text-xs text-gray-500 mt-1">Nota: ${item.customizations.notes}</div>` : ''}
+            </div><div class="font-bold">$${(item.price * item.quantity).toFixed(2)}</div></div>`;
+        });
+        html += `</div><div class="flex justify-between items-center mt-6 pt-4 border-t border-gray-700">
+        <span class="font-bold text-lg">Total:</span><span class="font-bold text-xl text-amber-500">$${total.toFixed(2)}</span></div>
+        <div class="mt-6"><button id="print-bill-btn" class="w-full bg-amber-600 text-white py-2 rounded-lg font-bold">
+        <i class="fas fa-print mr-2"></i> Imprimir Cuenta</button></div></div>`;
+        billDetails.innerHTML = html;
+        document.getElementById('print-bill-btn').addEventListener('click', () => {
+            generatePDF(table);
+        });
+    }
+    function generatePDF(table) {
+        const doc = new jsPDF();
+        doc.setFont('helvetica');
+        doc.setFontSize(24); doc.setTextColor(217, 119, 6); doc.text('TAQUERÍA MS', 105, 20, { align: 'center' });
+        doc.setFontSize(10); doc.setTextColor(100, 100, 100);
+        doc.text('Av. Pantitlán 397, Evolución, Nezahualcóyotl', 105, 26, { align: 'center' });
+        doc.text('Tel: 55 1234 5678 | Horario: 10:30 AM - 10:00 PM', 105, 30, { align: 'center' });
+        doc.setDrawColor(217, 119, 6); doc.setLineWidth(0.5); doc.line(50, 35, 160, 35);
+        doc.setFontSize(12); doc.setTextColor(40, 40, 40); doc.text(`Mesa: #${table}`, 15, 45);
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        doc.text(`Fecha: ${dateStr}`, 15, 51); doc.text(`Hora: ${timeStr}`, 15, 57);
+        doc.setDrawColor(200, 200, 200); doc.line(15, 62, 195, 62);
+        doc.setFontSize(12); doc.setTextColor(255, 255, 255); doc.setFillColor(217, 119, 6);
+        doc.rect(15, 67, 180, 8, 'F');
+        doc.text('Descripción', 20, 72); doc.text('Cant.', 140, 72); doc.text('Total', 170, 72);
+        const items = appState.orders[table]; let yPos = 80;
+        const groupedItems = {};
+        items.forEach(item => {
+            const key = `${item.id}-${JSON.stringify(item.customizations)}`;
+            if (!groupedItems[key]) groupedItems[key] = { ...item, quantity: 1 };
+            else groupedItems[key].quantity++;
+        });
+        doc.setFontSize(10); doc.setTextColor(40, 40, 40);
+        Object.values(groupedItems).forEach(item => {
+            doc.text(item.name, 20, yPos);
+            if (item.customizations && (item.customizations.ingredients.length > 0 || item.customizations.notes)) {
+                doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+                let detailText = '';
+                if (item.customizations.ingredients.length > 0) {
+                    detailText += `Ingredientes: ${item.customizations.ingredients.map(ing => {
+                    return ing.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                    }).join(', ')}`;
+                }
+                if (item.customizations.notes) {
+                    detailText += detailText ? ' | ' : ''; detailText += `Nota: ${item.customizations.notes}`;
+                }
+                const splitText = doc.splitTextToSize(detailText, 100);
+                splitText.forEach((line, i) => doc.text(line, 22, yPos + 5 + (i * 4)));
+                doc.setFontSize(10); doc.setTextColor(40, 40, 40); yPos += 5 + (splitText.length * 4);
+            }
+            doc.text(item.quantity.toString(), 140, yPos);
+            doc.text(`$${(item.price * item.quantity).toFixed(2)}`, 170, yPos);
+            yPos += 10;
+            if (item.customizations && (item.customizations.ingredients.length > 0 || item.customizations.notes)) yPos += 5;
+        });
+        doc.setDrawColor(200, 200, 200); doc.line(15, yPos, 195, yPos); yPos += 10;
+        const total = items.reduce((sum, item) => sum + item.price, 0);
+        doc.setFontSize(14); doc.text('TOTAL:', 140, yPos); doc.text(`$${total.toFixed(2)}`, 170, yPos);
+        yPos += 20; doc.setFontSize(12); doc.setTextColor(217, 119, 6);
+        doc.text('¡Gracias por su preferencia!', 105, yPos, { align: 'center' });
+        yPos += 10; doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+        doc.text('TAQUERÍA MS - Av. Pantitlán 397, Evolución, Nezahualcóyotl', 105, yPos, { align: 'center' });
+        doc.text(`Mesa #${table} | ${dateStr} ${timeStr}`, 105, yPos + 5, { align: 'center' });
+        doc.save(`TaqueriaMS_Mesa${table}_${now.getTime()}.pdf`);
+    }
+    function switchTab(tabName) {
+        document.querySelectorAll('#main-content > div').forEach(div => div.classList.add('hidden'));
+        document.getElementById(`${tabName}-content`).classList.remove('hidden');
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.tab === tabName) btn.classList.add('active');
+        });
+        if (tabName === 'orders') loadActiveOrders();
+        else if (tabName === 'bill' && appState.currentTable) loadBillDetails(appState.currentTable);
+    }
+    function activateEventListeners() {
+        const toggleButtons = document.querySelectorAll('.toggle-details');
+        toggleButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const details = this.closest('.item-card').querySelector('.details');
+                const icon = this.querySelector('i');
+                details.classList.toggle('hidden');
+                if(details.classList.contains('hidden')) {
+                    icon.classList.remove('fa-chevron-up'); icon.classList.add('fa-chevron-down');
+                } else {
+                    icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-up');
+                }
+            });
+        });
+        const quantityButtons = document.querySelectorAll('.quantity-btn');
+        quantityButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const itemId = parseInt(this.dataset.id);
+                const category = this.dataset.category;
+                const quantityElement = this.parentNode.querySelector('.quantity');
+                let currentQuantity = parseInt(quantityElement.textContent);
+                const itemFullData = menuItems[category].find(item => item.id === itemId);
+                if (this.classList.contains('plus')) currentQuantity++;
+                else if (this.classList.contains('minus') && currentQuantity > 0) currentQuantity--;
+                quantityElement.textContent = currentQuantity;
+                const key = `${category}-${itemId}`;
+                if (currentQuantity > 0) {
+                    appState.selectedItems[key] = {
+                        id: itemId, name: itemFullData.name, price: itemFullData.price, category: category,
+                        quantity: currentQuantity,
+                        customizations: appState.selectedItems[key]?.customizations || { ingredients: [], notes: '' }
+                    };
+                } else {
+                    delete appState.selectedItems[key]; 
+                }
+            });
+        });
+    }
+
+    function initializeWaiterApp() {
+        generateCategoryButtons();
+        const firstCategoryBtn = document.querySelector('.category-btn');
+        if (firstCategoryBtn) {
+            firstCategoryBtn.classList.remove('bg-gray-700');
+            firstCategoryBtn.classList.add('bg-amber-600', 'active');
+            loadProducts(firstCategoryBtn.dataset.category);
+        }
+        document.querySelectorAll('.nav-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const tabName = this.dataset.tab;
+                switchTab(tabName);
+            });
+        });
+        document.getElementById('add-to-order-btn').addEventListener('click', addItemsToOrder);
+        document.getElementById('confirm-table-btn').addEventListener('click', confirmTableSelection);
+        document.getElementById('current-table').addEventListener('click', showTablesModal);
+        for (let i = 1; i <= 6; i++) {
+            if (!appState.orders[i]) appState.orders[i] = [];
+        }
+    }
+</script>
+</body>
+</html>
